@@ -58,20 +58,19 @@ func wsHandler(session sockjs.Session) {
 				if err != nil && res != nil {
 					session.Send(res.(string))
 				}
-			}
-			if cmds[0] == "REQCON" {
-				if len(cmds) != 3 {
+			} else {
+				if len(cmds) != 2 {
 					log.Println("wrong params")
 					break
 				}
 				client = redis.NewClient(&redis.Options{
-					Addr:     cmds[1],
-					Password: cmds[2],
+					Addr:     cmds[0],
+					Password: cmds[1],
 					DB:       0,
 				})
 				isRedisConnected = true
 				log.Println("redis connected")
-				session.Send("redis connected")
+				session.Send("$connected")
 			}
 			continue
 		}
