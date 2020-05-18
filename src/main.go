@@ -30,6 +30,11 @@ func convStr2Interface(c []string) []interface{} {
 }
 
 func wsHandler(session sockjs.Session) {
+	defer func() {
+		if err := recover(); err != nil {
+			log.Println(err)
+		}
+	}()
 	log.Println("session connected", session.ID())
 	var client *redis.Client
 	isRedisConnected := false
@@ -40,13 +45,25 @@ func wsHandler(session sockjs.Session) {
 				continue
 			}
 			if isRedisConnected {
-				res, err := client.Do(convStr2Interface(cmds)...).Result()
+				var newCmds []string
+				if cmds[0] == "SET" {
+					newCmds = append(newCmds, cmds[0])
+					newCmds = append(newCmds, cmds[1])
+					newCmds = append(newCmds, strings.Join(cmds[2:], " "))
+				} else {
+					newCmds = cmds
+				}
+				res, err := client.Do(convStr2Interface(newCmds)...).Result()
 				session.Send(fmt.Sprintf("%v", res))
 				if err != nil && res != nil {
 					session.Send(res.(string))
 				}
 			}
 			if cmds[0] == "REQCON" {
+				if len(cmds) != 3 {
+					log.Println("wrong params")
+					break
+				}
 				client = redis.NewClient(&redis.Options{
 					Addr:     cmds[1],
 					Password: cmds[2],
