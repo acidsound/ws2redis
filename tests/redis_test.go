@@ -3,6 +3,7 @@ package tests
 import (
 	"fmt"
 	"github.com/go-redis/redis/v7"
+	"net"
 	"strings"
 	"testing"
 )
@@ -92,4 +93,30 @@ func TestArrayCmd(t *testing.T) {
 	if fmt.Sprintf("%v", res) != "46" {
 		panic(err)
 	}
+}
+
+func TestRawClient(t *testing.T) {
+	conn, err := net.Dial("tcp", "127.0.0.1:6380")
+	if err != nil {
+		panic(err)
+	}
+	buf := make([]byte, 1024)
+	go func(conn net.Conn, buf []byte) {
+		res := ""
+		for {
+			for {
+				n, err := conn.Read(buf)
+				if err != nil {
+					panic(err)
+				}
+				res += string(buf)
+				if n < 1024 {
+					break
+				}
+			}
+			t.Log(res)
+			res = ""
+		}
+	}(conn, buf)
+
 }

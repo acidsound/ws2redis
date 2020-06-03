@@ -2,11 +2,12 @@ package main
 
 import (
 	"fmt"
-	"github.com/go-redis/redis/v7"
-	"github.com/igm/sockjs-go/v3/sockjs"
 	"log"
 	"net/http"
 	"strings"
+
+	"github.com/go-redis/redis/v7"
+	"github.com/igm/sockjs-go/v3/sockjs"
 )
 
 func main() {
@@ -37,43 +38,46 @@ func wsHandler(session sockjs.Session) {
 	}()
 	log.Println("session connected", session.ID())
 	var client *redis.Client
-	isRedisConnected := false
+	if msg, err := session.Recv(); err == nil {
+		cmds := strings.Split(msg, " ")
+		if len(cmds) != 2 {
+			log.Println("wrong params")
+			return
+		}
+		client = redis.NewClient(&redis.Options{
+			Addr:     cmds[0],
+			Password: cmds[1],
+			DB:       0,
+		})
+		log.Println("redis connected")
+		session.Send("$connected")
+		go ws2redis(client, session)
+	}
+}
+
+func ws2redis(client *redis.Client, session sockjs.Session) {
 	for {
 		if msg, err := session.Recv(); err == nil {
 			cmds := strings.Split(msg, " ")
 			if len(cmds) < 1 {
 				continue
 			}
-			if isRedisConnected {
-				var newCmds []string
-				if cmds[0] == "SET" {
-					newCmds = append(newCmds, cmds[0])
-					newCmds = append(newCmds, cmds[1])
-					newCmds = append(newCmds, strings.Join(cmds[2:], " "))
-				} else {
-					newCmds = cmds
-				}
-				res, err := client.Do(convStr2Interface(newCmds)...).Result()
-				session.Send(fmt.Sprintf("%v", res))
-				if err != nil && res != nil {
-					session.Send(res.(string))
-				}
-			} else {
-				if len(cmds) != 2 {
-					log.Println("wrong params")
-					break
-				}
-				client = redis.NewClient(&redis.Options{
-					Addr:     cmds[0],
-					Password: cmds[1],
-					DB:       0,
-				})
-				isRedisConnected = true
-				log.Println("redis connected")
-				session.Send("$connected")
+			var newCmds []string
+			switch cmds[1] {
+			case "SET", "PUBLISH":
+				newCmds = append(newCmds, cmds[1])
+				newCmds = append(newCmds, cmds[2])
+				newCmds = append(newCmds, strings.Join(cmds[3:], " "))
+			default:
+				newCmds = cmds[1:]
 			}
-			continue
+
+			res, err := client.Do(convStr2Interface(newCmds)...).Result()
+			session.Send(fmt.Sprintf("%v %v", cmds[0], res))
+			if err != nil && res != nil {
+				session.Send(res.(string))
+			}
+
 		}
-		break
 	}
 }
