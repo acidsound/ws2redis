@@ -77,7 +77,11 @@ func ws2redis(client *redis.Client, session sockjs.Session) {
 			if err != nil && res != nil {
 				session.Send(res.(string))
 			}
-
+			continue
 		}
+		client.Close()
+		println("redis close")
+		break
 	}
+	println("ws closed")
 }
